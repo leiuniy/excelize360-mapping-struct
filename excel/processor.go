@@ -25,23 +25,18 @@ const (
 	NotInConfigurationItems
 	TimeFormatError
 	DataOutsideExpectedLimits
-	CannotGTCurrentTime
-	AlreadyBinding
 	ParamCannotBeEmpty
 )
 
 var errFormatList = map[int]excelErr{
 	ParamCannotBeEmpty:        {"%s参数不可为空"},
-	ParamInvalid:              {"%s参数输入错误"},
 	ParamUnqualified:          {"%s参数格式不正确"},
 	AlreadyExists:             {"%s已存在"},
 	NotExist:                  {"%s不存在"},
 	NotInConfigurationItems:   {"%s不在配置项中"},
 	TimeFormatError:           {"%s时间格式错误"},
 	DataOutsideExpectedLimits: {"%s数据不在预期限制范围"},
-	CannotGTCurrentTime:       {"%s不可大于当前时间"},
-	AlreadyBinding:            {"%s已绑定"},
-	ParamError:                {"%s参数验证失败"},
+	ParamInvalid:              {"%s参数验证失败"},
 }
 
 type excelErr struct {
@@ -72,8 +67,6 @@ func NewProcessor(body MappingStruct, isValid bool) (*processor, error) {
 	if p.val.Kind() != reflect.Ptr {
 		return nil, errors.New("body must be pointer struct")
 	}
-	//p.val = val.Elem()
-	//p.val = reflect.TypeOf(body)
 	p.body = body
 	p.openValid = isValid
 
@@ -161,6 +154,10 @@ func (p *processor) ParseContent(file io.Reader, mappingHeaderRow int, dataStart
 	rows := p.file.GetRows(p.sheetName)
 	if len(rows) < dataStartRow {
 		return nil, errors.New("excel file valid data behavior is empty")
+	}
+	//excel数据行数限制(500行)
+	if len(rows)-(dataStartRow-1) > 500 {
+		return nil, errors.New("data overrun")
 	}
 
 	res := new(Result)
