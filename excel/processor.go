@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"github.com/360EntSecGroup-Skylar/excelize"
+	"github.com/astaxie/beego/logs"
+	"github.com/extrame/xls"
 	"io"
-	"mime/multipart"
+	"os"
 	"path"
 	"reflect"
 	"regexp"
@@ -51,7 +53,7 @@ type processor struct {
 	file         *excelize.File
 	fieldMapping map[string]map[string]string
 	sheetName    string
-	body         MappingStruct
+	body         interface{}
 	val          reflect.Value
 	openValid    bool
 	uniqueMap    map[int][]string
@@ -61,7 +63,12 @@ type MappingStruct interface {
 	ExcelRowProcess(res *Result) error
 }
 
-func NewProcessor(body MappingStruct, isValid bool) (*processor, error) {
+func (p *processor) ExcelRowProcess(res *Result) error {
+	logs.Warn("excel structure does not implement a custom validation interface")
+	return nil
+}
+
+func NewProcessor(body interface{}, isValid bool) (*processor, error) {
 	p := new(processor)
 	p.val = reflect.ValueOf(body)
 	if p.val.Kind() != reflect.Ptr {
@@ -137,16 +144,14 @@ func (p *processor) generateMapping(val reflect.Value, baseField string) {
 	}
 }
 
-func (p *processor) ParseContent(file io.Reader, mappingHeaderRow int, dataStartRow int) (*Result, error) {
+func (p *processor) ParseContent(file *os.File, mappingHeaderRow int, dataStartRow int) (*Result, error) {
 	if mappingHeaderRow-1 < 0 {
 		return nil, errors.New("no Excel mapping header position is specified")
 	}
 	if mappingHeaderRow >= dataStartRow {
 		return nil, errors.New("mapping header row position cannot be greater than or equal to the beginning of the data row")
 	}
-	var err error
-	p.file, err = excelize.OpenReader(file)
-	if err != nil {
+	if err := p.readExcel(file); err != nil {
 		return nil, err
 	}
 	p.uniqueMap = make(map[int][]string)
@@ -167,6 +172,44 @@ func (p *processor) ParseContent(file io.Reader, mappingHeaderRow int, dataStart
 		return nil, err
 	}
 	return res, nil
+}
+
+func (p *processor) readExcel(file *os.File) (err error) {
+	var allowExtMap = map[string]bool{
+		".xlsx": true,
+		".xls":  true,
+	}
+	ext := path.Ext(file.Name())
+	//判断文件后缀
+	if _, ok := allowExtMap[ext]; !ok {
+		return fmt.Errorf("file request format error，support XLSX and XLS")
+	}
+	if ext == ".xls" {
+		p.file, err = convertXlsToXlsx(file, "utf-8")
+		return err
+	}
+	p.file, err = excelize.OpenReader(file)
+	return err
+}
+
+//ConvertXlsToXlsx .
+func convertXlsToXlsx(file io.ReadSeeker, charset string) (*excelize.File, error) {
+	open, err := xls.OpenReader(file, charset)
+	if err != nil {
+		return nil, err
+	}
+	sheet := open.GetSheet(0)
+	newFile := excelize.NewFile()
+	newFile.SetActiveSheet(newFile.NewSheet("Sheet1"))
+	for j := 0; j < int(sheet.MaxRow); j++ {
+		xlsRow := sheet.Row(j)
+		rows := make([]string, 0)
+		for i := 0; i < xlsRow.LastCol(); i++ {
+			rows = append(rows, xlsRow.Col(i))
+		}
+		newFile.SetSheetRow("Sheet1", "A"+strconv.Itoa(j+1), &rows)
+	}
+	return newFile, nil
 }
 
 func (p *processor) rows(rows [][]string, mappingHeaderRow, dataStartRow int, res *Result) error {
@@ -206,7 +249,7 @@ func (p *processor) rows(rows [][]string, mappingHeaderRow, dataStartRow int, re
 		if len(errList) != 0 {
 			res.errors[rowIndex+1] = errList
 		}
-		p.body = newBodyVal.Interface().(MappingStruct)
+		p.body = newBodyVal.Interface()
 		//自定义参数验证
 		if err := p.definedValid(res); err != nil {
 			return err
@@ -221,7 +264,12 @@ func (p *processor) rows(rows [][]string, mappingHeaderRow, dataStartRow int, re
 
 func (p *processor) definedValid(res *Result) error {
 	if p.openValid {
-		return p.body.ExcelRowProcess(res)
+		inf, ok := p.body.(MappingStruct)
+		if !ok {
+			//如果未实现自定义验证接口，调用默认验证
+			return p.ExcelRowProcess(res)
+		}
+		return inf.ExcelRowProcess(res)
 	}
 	return nil
 }
@@ -409,19 +457,6 @@ func (r *Result) Format(array interface{}) error {
 		return err
 	}
 	return json.Unmarshal(marshal, &array)
-}
-
-//ValidateExcelSuffix .
-func ValidateExcelSuffix(header *multipart.FileHeader) error {
-	var allowExtMap = map[string]bool{
-		".xlsx": true,
-		".xls":  true,
-	}
-	//判断文件后缀
-	if _, ok := allowExtMap[path.Ext(header.Filename)]; !ok {
-		return fmt.Errorf("file request format error，support XLSX and XLS")
-	}
-	return nil
 }
 
 //ValidateExcelSize .
