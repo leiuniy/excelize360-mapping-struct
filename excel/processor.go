@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/360EntSecGroup-Skylar/excelize"
 	"github.com/astaxie/beego/logs"
-	"github.com/extrame/xls"
+	"github.com/shakinm/xlsReader/xls"
 	"io"
 	"os"
 	"path"
@@ -185,7 +185,7 @@ func (p *processor) readExcel(file *os.File) (err error) {
 		return fmt.Errorf("file request format error，support XLSX and XLS")
 	}
 	if ext == ".xls" {
-		p.file, err = convertXlsToXlsx(file, "utf-8")
+		p.file, err = convertXlsToXlsx(file)
 		return err
 	}
 	p.file, err = excelize.OpenReader(file)
@@ -193,19 +193,29 @@ func (p *processor) readExcel(file *os.File) (err error) {
 }
 
 //ConvertXlsToXlsx .
-func convertXlsToXlsx(file io.ReadSeeker, charset string) (*excelize.File, error) {
-	open, err := xls.OpenReader(file, charset)
+func convertXlsToXlsx(file io.ReadSeeker) (*excelize.File, error) {
+	open, err := xls.OpenReader(file)
 	if err != nil {
 		return nil, err
 	}
-	sheet := open.GetSheet(0)
+	sheet, err := open.GetSheet(0)
+	if err != nil {
+		return nil, err
+	}
 	newFile := excelize.NewFile()
 	newFile.SetActiveSheet(newFile.NewSheet("Sheet1"))
-	for j := 0; j < int(sheet.MaxRow); j++ {
-		xlsRow := sheet.Row(j)
+	for j := 0; j < sheet.GetNumberRows(); j++ {
+		xlsRow, err := sheet.GetRow(j)
+		if err != nil {
+			return nil, err
+		}
 		rows := make([]string, 0)
-		for i := 0; i < xlsRow.LastCol(); i++ {
-			rows = append(rows, xlsRow.Col(i))
+		for i := 0; i < len(xlsRow.GetCols()); i++ {
+			col, err := xlsRow.GetCol(i)
+			if err != nil {
+				return nil, err
+			}
+			rows = append(rows, col.GetString())
 		}
 		newFile.SetSheetRow("Sheet1", "A"+strconv.Itoa(j+1), &rows)
 	}

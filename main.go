@@ -70,6 +70,8 @@ func main() {
 		log.Println(err.Error())
 		return
 	}
+	defer file.Close()
+
 	p := new(VehicleRepair)
 	//p := new(Project)
 	//p.Time = time.Now()
