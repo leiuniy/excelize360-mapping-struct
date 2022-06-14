@@ -106,42 +106,27 @@ func (p *processor) generateMapping(val reflect.Value, baseField string) {
 		}
 		excel, ok := typ.Field(i).Tag.Lookup("excel")
 		if !ok {
-
 			//生成嵌套结构体的映射关系
 			fieldVal := val.Field(i)
 			p.generateMapping(fieldVal, fieldName)
 			continue
 		}
 		m := map[string]string{"name": fieldName}
-
-		rex := regexp.MustCompile(`mapping\((.*?)\)`)
-		for _, i := range rex.FindAllStringSubmatch(excel, -1) {
-			if len(i) >= 2 {
-				m["mapping"] = i[1]
-			}
-		}
-
-		rex = regexp.MustCompile(`unique\((.*?)\)`)
-		for _, i := range rex.FindAllStringSubmatch(excel, -1) {
-			if len(i) >= 2 {
-				m["unique"] = i[1]
-			}
-		}
-
-		rex = regexp.MustCompile(`date\((.*?)\)`)
-		for _, i := range rex.FindAllStringSubmatch(excel, -1) {
-			if len(i) >= 2 {
-				m["date"] = i[1]
-			}
-		}
-
-		rex = regexp.MustCompile(`name\((.*?)\)`)
-		for _, i := range rex.FindAllStringSubmatch(excel, -1) {
-			if len(i) >= 2 {
-				p.fieldMapping[strings.TrimSpace(i[1])] = m
-			}
-		}
+		m["mapping"], _ = StringMatchExport(excel, regexp.MustCompile(`mapping\((.*?)\)`))
+		m["unique"], _ = StringMatchExport(excel, regexp.MustCompile(`unique\((.*?)\)`))
+		m["date"], _ = StringMatchExport(excel, regexp.MustCompile(`date\((.*?)\)`))
+		mappingName, _ := StringMatchExport(excel, regexp.MustCompile(`name\((.*?)\)`))
+		p.fieldMapping[strings.TrimSpace(mappingName)] = m
 	}
+}
+
+func StringMatchExport(str string, reg *regexp.Regexp) (res string, err error) {
+	defer func() {
+		if panicInfo := recover(); panicInfo != nil {
+			err = errors.New("not match reg")
+		}
+	}()
+	return reg.FindStringSubmatch(str)[1], nil
 }
 
 func (p *processor) ParseContent(file *os.File, mappingHeaderRow int, dataStartRow int) (*Result, error) {
