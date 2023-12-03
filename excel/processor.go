@@ -31,14 +31,14 @@ const (
 )
 
 var errFormatList = map[int]excelErr{
-	ParamCannotBeEmpty:        {"%s参数不可为空"},
-	ParamUnqualified:          {"%s参数格式不正确"},
-	AlreadyExists:             {"%s已存在"},
-	NotExist:                  {"%s不存在"},
-	NotInConfigurationItems:   {"%s不在配置项中"},
-	TimeFormatError:           {"%s时间格式错误"},
-	DataOutsideExpectedLimits: {"%s数据不在预期限制范围"},
-	ParamInvalid:              {"%s参数验证失败"},
+	ParamCannotBeEmpty:        {"%s Parameter cannot be null"},
+	ParamUnqualified:          {"%s Parameter format is incorrect"},
+	AlreadyExists:             {"%s Already exist\n"},
+	NotExist:                  {"%s Not exist"},
+	NotInConfigurationItems:   {"%s Not in the configuration item"},
+	TimeFormatError:           {"%s Time format error"},
+	DataOutsideExpectedLimits: {"%s Data is outside the expected limits"},
+	ParamInvalid:              {"%s Parameter validation failure"},
 }
 
 type excelErr struct {
@@ -177,7 +177,7 @@ func (p *processor) readExcel(file *os.File) (err error) {
 	return err
 }
 
-//ConvertXlsToXlsx .
+// ConvertXlsToXlsx .
 func convertXlsToXlsx(file io.ReadSeeker) (*excelize.File, error) {
 	open, err := xls.OpenReader(file)
 	if err != nil {
@@ -454,7 +454,7 @@ func (r *Result) Format(array interface{}) error {
 	return json.Unmarshal(marshal, &array)
 }
 
-//ValidateExcelSize .
+// ValidateExcelSize .
 func ValidateExcelSize(size int64) error {
 	if size > 500*1024 {
 		return fmt.Errorf("file maximum size 500 kb")
